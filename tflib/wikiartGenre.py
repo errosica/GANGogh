@@ -11,7 +11,7 @@ DIM = 256
 IMAGE_EXT = 'jpg'
 
 #Set your own path to images
-path = os.path.normpath('C:/Users/kenny/Desktop/toGit/misc/smallimages/')
+path = os.path.normpath('/jet/prs/workspace/GANGogh/data/wikiart/')
 
 styles = {'Plaid': 808,
           'Animals': 1680,
