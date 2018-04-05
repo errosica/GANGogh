@@ -7,11 +7,43 @@ import time
 import random
 import os
 #Set the dimension of images you want to be passed in to the network
-DIM = 64
+DIM = 256
+IMAGE_EXT = 'jpg'
 
 #Set your own path to images
 path = os.path.normpath('C:/Users/kenny/Desktop/toGit/misc/smallimages/')
 
+styles = {'Plaid': 808,
+          'Animals': 1680,
+          'Leopard': 1231,
+          'Geometric': 4068,
+          'Stripes': 2921,
+          'Abstract': 5506,
+          'Camouflage': 2192,
+          'Tropical': 5842,
+          'Floral': 6013}
+
+styleNum = {'Plaid': 0,
+          'Animals': 1,
+          'Leopard': 2,
+          'Geometric': 3,
+          'Stripes': 4,
+          'Abstract': 5,
+          'Camouflage': 6,
+          'Tropical': 7,
+          'Floral': 8}
+
+curPos = {'Plaid': 0,
+          'Animals': 0,
+          'Leopard': 0,
+          'Geometric': 0,
+          'Stripes': 0,
+          'Abstract': 0,
+          'Camouflage': 0,
+          'Tropical': 0,
+          'Floral': 0}
+
+"""
 #This dictionary should be updated to hold the absolute number of images associated with each genre used during training
 styles = {'abstract': 14794,
           'animal-painting': 1319,
@@ -57,6 +89,7 @@ curPos = {'abstract': 0,
           'religious-painting': 0,
           'still-life': 0,
           'symbolic-painting': 0}
+"""
 
 testNums = {}
 trainNums = {}
@@ -73,8 +106,8 @@ def inf_gen(gen):
     while True:
         for (images,labels) in gen():
             yield images,labels
-            
-    
+
+
 
 def make_generator(files, batch_size, n_classes):
     if batch_size % n_classes != 0:
@@ -83,7 +116,7 @@ def make_generator(files, batch_size, n_classes):
     class_batch = batch_size // n_classes
 
     generators = []
-    
+
     def get_epoch():
 
         while True:
@@ -99,7 +132,7 @@ def make_generator(files, batch_size, n_classes):
                         curr = 0
                         random.shuffle(list(files[style]))
                     t0=time.time()
-                    image = scipy.misc.imread("{}/{}/{}.png".format(path, style, str(curr)),mode='RGB')
+                    image = scipy.misc.imread("{}/{}/{}.{}".format(path, style, str(curr), IMAGE_EXT),mode='RGB')
                     #image = scipy.misc.imresize(image,(DIM,DIM))
                     images[n % batch_size] = image.transpose(2,0,1)
                     labels[n % batch_size, int(styleLabel)] = 1
@@ -113,9 +146,9 @@ def make_generator(files, batch_size, n_classes):
             np.random.set_state(rng_state)
             np.random.shuffle(labels)
             yield (images, labels)
-                        
 
-        
+
+
     return get_epoch
 
 def load(batch_size):
