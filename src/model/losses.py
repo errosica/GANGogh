@@ -1,14 +1,15 @@
 import tensorflow as tf
 from src.model.discriminator import ACGANDiscriminator as Discriminator
 
-def calculate(real_disc,
-           real_class_disc,
-           real_labels,
-           fake_disc,
-           fake_class_disc,
-           fake_labels,
-           num_classes,
-           batch_size):
+def calculate(batch_size,
+              num_classes,
+              lambda_penalty,
+              real_disc,
+              real_class_disc,
+              real_labels,
+              fake_disc,
+              fake_class_disc,
+              fake_labels):
     with tf.variable_scope('losses'):
 
         gen_summaries  = []
