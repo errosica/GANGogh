@@ -25,7 +25,7 @@ MODE = 'acwgan' # dcgan, wgan, wgan-gp, lsgan
 DIM = 256 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
 N_GPUS = 1 # Number of GPUs
-BATCH_SIZE = 84 # Batch size. Must be a multiple of CLASSES and N_GPUS
+BATCH_SIZE = 18 # Batch size. Must be a multiple of CLASSES and N_GPUS
 ITERS = 200000 # How many iterations to train for
 LAMBDA = 10 # Gradient penalty lambda hyperparameter
 OUTPUT_DIM = DIM*DIM*3 # Number of pixels in each image
@@ -157,7 +157,32 @@ def kACGANGenerator(n_samples, numClasses, labels, noise=None, dim=DIM, bn=True,
     condition = tf.reshape(condition, [-1, dim*2, 32, 32])
     output = pixcnn_gated_nonlinearity('Generator.nl4', dim, output[:,::2], output[:,1::2], condition[:,::2], condition[:,1::2])
 
-    output = lib.ops.deconv2d.Deconv2D('Generator.5', dim, 3, 5, output)
+    """
+    Additional deconv layers
+    """
+    ## add 2 more to get from 64->256
+    output = lib.ops.deconv2d.Deconv2D('Generator.5', dim, dim, 5, output)
+    if bn:
+        output = Batchnorm('Generator.BN5', [0,2,3], output)
+    condition = lib.ops.linear.Linear('Generator.cond5', numClasses, 64*64*dim, labels)
+    condition = tf.reshape(condition, [-1, dim, 64, 64])
+    output = pixcnn_gated_nonlinearity('Generator.nl5', int(dim/2), output[:,::2], output[:,1::2], condition[:,::2], condition[:,1::2])
+
+    output = lib.ops.deconv2d.Deconv2D('Generator.6', int(dim/2), int(dim/2), 5, output)
+
+    if bn:
+        output = Batchnorm('Generator.BN6', [0,2,3], output)
+    condition = lib.ops.linear.Linear('Generator.cond6', numClasses, 128*128*int(dim/2), labels)
+    condition = tf.reshape(condition, [-1, int(dim/2), 128, 128])
+    output = pixcnn_gated_nonlinearity('Generator.nl6', int(dim/4), output[:,::2], output[:,1::2], condition[:,::2], condition[:,1::2])
+
+    output = lib.ops.deconv2d.Deconv2D('Generator.7', int(dim/4), 3, 5, output)
+    ###
+    #print(output)
+
+    #output = lib.ops.deconv2d.Deconv2D('Generator.5', dim, 3, 5, output)
+
+    #print(output)
 
     output = tf.tanh(output)
 
@@ -192,17 +217,16 @@ def kACGANDiscriminator(inputs, numClasses, dim=DIM, bn=True, nonlinearity=Leaky
     if bn:
         output = Batchnorm('Discriminator.BN4', [0,2,3], output)
     output = nonlinearity(output)
-    finalLayer = tf.reshape(output, [-1, 4*4*8*dim])
+    output_shape = 16*16*2048
+    finalLayer = tf.reshape(output, [-1, output_shape])
 
-    sourceOutput = lib.ops.linear.Linear('Discriminator.sourceOutput', 4*4*8*dim, 1, finalLayer)
+    sourceOutput = lib.ops.linear.Linear('Discriminator.sourceOutput', output_shape, 1, finalLayer)
 
-    classOutput = lib.ops.linear.Linear('Discriminator.classOutput', 4*4*8*dim, numClasses, finalLayer)
+    classOutput = lib.ops.linear.Linear('Discriminator.classOutput', output_shape, numClasses, finalLayer)
 
     lib.ops.conv2d.unset_weights_stdev()
     lib.ops.deconv2d.unset_weights_stdev()
     lib.ops.linear.unset_weights_stdev()
-
-
 
     return (tf.reshape(sourceOutput, [-1]), tf.reshape(classOutput, [-1, numClasses]))
 
@@ -217,154 +241,159 @@ def genRandomLabels(n_samples, numClasses,condition=None):
         labels[i, labelNum] = 1
     return labels
 
+tf.train.get_or_create_global_step()
 Generator, Discriminator = GeneratorAndDiscriminator()
 
-with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as session:
+all_real_data_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE, 3, DIM, DIM])
+all_real_label_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE,CLASSES])
 
-    all_real_data_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE, 3, DIM, DIM])
-    all_real_label_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE,CLASSES])
+generated_labels_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE,CLASSES])
+sample_labels_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE,CLASSES])
 
-    generated_labels_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE,CLASSES])
-    sample_labels_conv = tf.placeholder(tf.int32, shape=[BATCH_SIZE,CLASSES])
+if tf.__version__.startswith('1.'):
+    split_real_data_conv = tf.split(all_real_data_conv, len(DEVICES))
+    split_real_label_conv = tf.split(all_real_label_conv, len(DEVICES))
+    split_generated_labels_conv = tf.split(generated_labels_conv, len(DEVICES))
+    split_sample_labels_conv = tf.split(sample_labels_conv, len(DEVICES))
+else:
+    split_real_data_conv = tf.split(0, len(DEVICES), all_real_data_conv)
+    split_real_data_label = tf.split(0, len(DEVICES), all_real_data_conv)
+    split_generated_labels = tf.split(0, len(DEVICES), generated_labels_conv)
+    split_sample_labels = tf.split(0, len(DEVICES), sample_labels_conv)
 
-    if tf.__version__.startswith('1.'):
-        split_real_data_conv = tf.split(all_real_data_conv, len(DEVICES))
-        split_real_label_conv = tf.split(all_real_label_conv, len(DEVICES))
-        split_generated_labels_conv = tf.split(generated_labels_conv, len(DEVICES))
-        split_sample_labels_conv = tf.split(sample_labels_conv, len(DEVICES))
-    else:
-        split_real_data_conv = tf.split(0, len(DEVICES), all_real_data_conv)
-        split_real_data_label = tf.split(0, len(DEVICES), all_real_data_conv)
-        split_generated_labels = tf.split(0, len(DEVICES), generated_labels_conv)
-        split_sample_labels = tf.split(0, len(DEVICES), sample_labels_conv)
+gen_costs, disc_costs = [],[]
 
-    gen_costs, disc_costs = [],[]
+for device_index, (device, real_data_conv, real_label_conv) in enumerate(zip(DEVICES, split_real_data_conv, split_real_label_conv)):
+    with tf.device(device):
 
-    for device_index, (device, real_data_conv, real_label_conv) in enumerate(zip(DEVICES, split_real_data_conv, split_real_label_conv)):
-        with tf.device(device):
+        real_data = tf.reshape(2*((tf.cast(real_data_conv, tf.float32)/255.)-.5), [BATCH_SIZE//len(DEVICES), OUTPUT_DIM])
+        real_labels = tf.reshape(real_label_conv, [BATCH_SIZE//len(DEVICES), CLASSES])
 
-            real_data = tf.reshape(2*((tf.cast(real_data_conv, tf.float32)/255.)-.5), [BATCH_SIZE//len(DEVICES), OUTPUT_DIM])
-            real_labels = tf.reshape(real_label_conv, [BATCH_SIZE//len(DEVICES), CLASSES])
+        generated_labels = tf.reshape(split_generated_labels_conv, [BATCH_SIZE//len(DEVICES), CLASSES])
+        sample_labels = tf.reshape(split_sample_labels_conv, [BATCH_SIZE//len(DEVICES), CLASSES])
 
-            generated_labels = tf.reshape(split_generated_labels_conv, [BATCH_SIZE//len(DEVICES), CLASSES])
-            sample_labels = tf.reshape(split_sample_labels_conv, [BATCH_SIZE//len(DEVICES), CLASSES])
+        fake_data, fake_labels= Generator(BATCH_SIZE//len(DEVICES), CLASSES, generated_labels)
 
-            fake_data, fake_labels= Generator(BATCH_SIZE//len(DEVICES), CLASSES, generated_labels)
+        #set up discrimnator results
 
-            #set up discrimnator results
-
-            disc_fake,disc_fake_class = Discriminator(fake_data, CLASSES)
-            disc_real,disc_real_class = Discriminator(real_data, CLASSES)
-
-            prediction = tf.argmax(disc_fake_class, 1)
-            correct_answer = tf.argmax(fake_labels, 1)
-            equality = tf.equal(prediction, correct_answer)
-            genAccuracy = tf.reduce_mean(tf.cast(equality, tf.float32))
-
-            prediction = tf.argmax(disc_real_class, 1)
-            correct_answer = tf.argmax(real_labels, 1)
-            equality = tf.equal(prediction, correct_answer)
-            realAccuracy = tf.reduce_mean(tf.cast(equality, tf.float32))
-
-            gen_cost = -tf.reduce_mean(disc_fake)
-            disc_cost = tf.reduce_mean(disc_fake) - tf.reduce_mean(disc_real)
-
-            gen_cost_test = -tf.reduce_mean(disc_fake)
-            disc_cost_test = tf.reduce_mean(disc_fake) - tf.reduce_mean(disc_real)
-
-            generated_class_cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=disc_fake_class,
-                                                                                              labels=fake_labels))
+        disc_fake,disc_fake_class = Discriminator(fake_data, CLASSES)
+        disc_real,disc_real_class = Discriminator(real_data, CLASSES)
 
 
-            real_class_cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=disc_real_class,
-                                                                                              labels=real_labels))
-            gen_cost += generated_class_cost
-            disc_cost += real_class_cost
+        prediction = tf.argmax(disc_fake_class, 1)
+        correct_answer = tf.argmax(fake_labels, 1)
+        equality = tf.equal(prediction, correct_answer)
+        genAccuracy = tf.reduce_mean(tf.cast(equality, tf.float32))
 
-            alpha = tf.random_uniform(
-                shape=[BATCH_SIZE//len(DEVICES),1],
-                minval=0.,
-                maxval=1.
-            )
-            differences = fake_data - real_data
-            interpolates = real_data + (alpha*differences)
-            gradients = tf.gradients(Discriminator(interpolates, CLASSES)[0], [interpolates])[0]
-            slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
-            gradient_penalty = tf.reduce_mean((slopes-1.)**2)
-            disc_cost += LAMBDA*gradient_penalty
+        prediction = tf.argmax(disc_real_class, 1)
+        correct_answer = tf.argmax(real_labels, 1)
 
-            real_class_cost_gradient = real_class_cost*50 + LAMBDA*gradient_penalty
+        equality = tf.equal(prediction, correct_answer)
+        realAccuracy = tf.reduce_mean(tf.cast(equality, tf.float32))
+
+        gen_cost = -tf.reduce_mean(disc_fake)
+        disc_cost = tf.reduce_mean(disc_fake) - tf.reduce_mean(disc_real)
+
+        gen_cost_test = -tf.reduce_mean(disc_fake)
+        disc_cost_test = tf.reduce_mean(disc_fake) - tf.reduce_mean(disc_real)
+
+        generated_class_cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=disc_fake_class,
+                                                                                          labels=fake_labels))
 
 
-            gen_costs.append(gen_cost)
-            disc_costs.append(disc_cost)
+        real_class_cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=disc_real_class,
+                                                                                          labels=real_labels))
+        gen_cost += generated_class_cost
+        disc_cost += real_class_cost
 
-    gen_cost = tf.add_n(gen_costs) / len(DEVICES)
-    disc_cost = tf.add_n(disc_costs) / len(DEVICES)
+        alpha = tf.random_uniform(
+            shape=[BATCH_SIZE//len(DEVICES),1],
+            minval=0.,
+            maxval=1.
+        )
+        differences = fake_data - real_data
+        interpolates = real_data + (alpha*differences)
+        gradients = tf.gradients(Discriminator(interpolates, CLASSES)[0], [interpolates])[0]
+        slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
+        gradient_penalty = tf.reduce_mean((slopes-1.)**2)
+        disc_cost += LAMBDA*gradient_penalty
 
-    gen_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(gen_cost,
-                                                                                             var_list=lib.params_with_name('Generator'),
-                                                                                             colocate_gradients_with_ops=True)
-    disc_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(disc_cost,
-                                                                                              var_list=lib.params_with_name('Discriminator.'),
-                                                                                              colocate_gradients_with_ops=True)
-    class_train_op =  tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(real_class_cost_gradient,
+        real_class_cost_gradient = real_class_cost*50 + LAMBDA*gradient_penalty
+
+
+        gen_costs.append(gen_cost)
+        disc_costs.append(disc_cost)
+
+gen_cost = tf.add_n(gen_costs) / len(DEVICES)
+disc_cost = tf.add_n(disc_costs) / len(DEVICES)
+
+gen_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(gen_cost,
+                                                                                         var_list=lib.params_with_name('Generator'),
+                                                                                         colocate_gradients_with_ops=True)
+disc_train_op = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(disc_cost,
+                                                                                          var_list=lib.params_with_name('Discriminator.'),
+                                                                                          colocate_gradients_with_ops=True)
+class_train_op =  tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9).minimize(real_class_cost_gradient,
                                                                                                 var_list=lib.params_with_name('Discriminator.'),
                                                                                                 colocate_gradients_with_ops=True)
     # For generating samples
 
-    fixed_noise = tf.constant(np.random.normal(size=(BATCH_SIZE, 128)).astype('float32'))
-    all_fixed_noise_samples = []
-    for device_index, device in enumerate(DEVICES):
-        n_samples = BATCH_SIZE // len(DEVICES)
-        all_fixed_noise_samples.append(Generator(n_samples, CLASSES, sample_labels,noise=fixed_noise[device_index*n_samples:(device_index+1)*n_samples])[0])
-        if tf.__version__.startswith('1.'):
-            all_fixed_noise_samples = tf.concat(all_fixed_noise_samples, axis=0)
-        else:
-            all_fixed_noise_samples = tf.concat(0, all_fixed_noise_samples)
+fixed_noise = tf.constant(np.random.normal(size=(BATCH_SIZE, 128)).astype('float32'))
+all_fixed_noise_samples = []
+for device_index, device in enumerate(DEVICES):
+    n_samples = BATCH_SIZE // len(DEVICES)
+    all_fixed_noise_samples.append(Generator(n_samples, CLASSES, sample_labels,noise=fixed_noise[device_index*n_samples:(device_index+1)*n_samples])[0])
+    if tf.__version__.startswith('1.'):
+        all_fixed_noise_samples = tf.concat(all_fixed_noise_samples, axis=0)
+    else:
+        all_fixed_noise_samples = tf.concat(0, all_fixed_noise_samples)
 
 
-    def generate_image(iteration):
-        for i in range(CLASSES):
-            curLabel= genRandomLabels(BATCH_SIZE,CLASSES,condition=i)
-            samples = session.run(all_fixed_noise_samples, feed_dict={sample_labels: curLabel})
-            samples = ((samples+1.)*(255.99/2)).astype('int32')
-            lib.save_images.save_images(samples.reshape((BATCH_SIZE, 3, DIM, DIM)), 'generated/samples_{}_{}.png'.format(str(i), iteration))
+def generate_image(iteration):
+    for i in range(CLASSES):
+        curLabel= genRandomLabels(BATCH_SIZE,CLASSES,condition=i)
+        samples = session.run(all_fixed_noise_samples, feed_dict={sample_labels: curLabel})
+        samples = ((samples+1.)*(255.99/2)).astype('int32')
+        lib.save_images.save_images(samples.reshape((BATCH_SIZE, 3, DIM, DIM)), 'generated/samples_{}_{}.png'.format(str(i), iteration))
 
 
 
-    # Dataset iterator
-    train_gen, dev_gen = lib.wikiartGenre.load(BATCH_SIZE)
+# Dataset iterator
+train_gen, dev_gen = lib.wikiartGenre.load(BATCH_SIZE)
 
-    def softmax_cross_entropy(logit, y):
-        return -tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logit, labels=y))
+def softmax_cross_entropy(logit, y):
+    return -tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logit, labels=y))
 
-    def inf_train_gen():
-        while True:
-            for (images,labels) in train_gen():
-                yield images,labels
+def inf_train_gen():
+    while True:
+        for (images,labels) in train_gen():
+            yield images,labels
 
 
-    _sample_labels = genRandomLabels(BATCH_SIZE, CLASSES)
-    # Save a batch of ground-truth samples
+_sample_labels = genRandomLabels(BATCH_SIZE, CLASSES)
+
+sess_config = tf.ConfigProto(allow_soft_placement=True)
+with tf.train.MonitoredTrainingSession('', is_chief=True, checkpoint_dir='./logs', config=sess_config, save_checkpoint_secs=300) as session:
     _x,_y = next(train_gen())
     _x_r = session.run(real_data, feed_dict={all_real_data_conv: _x})
     _x_r = ((_x_r+1.)*(255.99/2)).astype('int32')
     lib.save_images.save_images(_x_r.reshape((BATCH_SIZE, 3, DIM, DIM)), 'generated/samples_groundtruth.png')
 
 
-
     session.run(tf.initialize_all_variables(), feed_dict={generated_labels_conv: genRandomLabels(BATCH_SIZE,CLASSES)})
     gen = train_gen()
 
+    print('Running pretraining routine')
     for iterp in range(PREITERATIONS):
         _data, _labels = next(gen)
+        print('[pretrain] Iteration %d' % iterp)
         _ , accuracy = session.run([disc_train_op, realAccuracy],feed_dict = {all_real_data_conv: _data, all_real_label_conv: _labels, generated_labels_conv: genRandomLabels(BATCH_SIZE, CLASSES)})
         if iterp % 100 == 99:
-            print('pretraining accuracy: ' + str(accuracy))
+            print('[pretrain] Pretraining accuracy: ' + str(accuracy))
 
-
+    print('Running training iterations')
     for iteration in range(ITERS):
+        print('[train] Iteration %d' % iteration)
         start_time = time.time()
         # Train generator
         if iteration > 0:
