@@ -1,7 +1,7 @@
 import tensorflow as tf
 from src.model.discriminator import ACGANDiscriminator as Discriminator
 
-def losses(real_disc,
+def calculate(real_disc,
            real_class_disc,
            real_labels,
            fake_disc,
