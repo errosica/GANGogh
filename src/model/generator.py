@@ -26,7 +26,6 @@ def ACGANGenerator(batch_size,
             z           = tf.random_normal([batch_size, z_dim], name='z')
             labels_pl   = tf.placeholder([None, num_classes], tf.int32, name='labels')
             labels      = tf.cast(labels_pl, tf.float32)
-            num_classes = tf.shape(labels)[-1]
             noise       = tf.concat([noise, labels], 1)
 
         """
