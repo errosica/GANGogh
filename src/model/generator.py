@@ -19,12 +19,13 @@ def ACGANGenerator(batch_size,
 
     Returns:
         Tensor[NCHW | NHWC]: A tensor representing the output image, with the same format as the data_format param.
+        Tensor[None, num_classes]: A placeholder tensor representing the intended class labels for the batch.
     """
     with tf.variable_scope('G', reuse=tf.AUTO_REUSE):
         with tf.variable_scope('input'):
             z           = tf.random_normal([batch_size, z_dim], name='z')
             labels_pl   = tf.placeholder([None, num_classes], tf.int32, name='labels')
-            labels      = tf.cast(labels, tf.float32)
+            labels      = tf.cast(labels_pl, tf.float32)
             num_classes = tf.shape(labels)[-1]
             noise       = tf.concat([noise, labels], 1)
 
