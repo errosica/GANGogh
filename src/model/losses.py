@@ -7,7 +7,8 @@ def losses(real_disc,
            fake_disc,
            fake_class_disc,
            fake_labels,
-           num_classes):
+           num_classes,
+           batch_size):
     with tf.variable_scope('losses'):
 
         gen_summaries  = []

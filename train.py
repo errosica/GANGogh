@@ -57,9 +57,9 @@ def main():
     real_disc, real_class_disc = Discriminator(real_batch, num_classes=num_classes)
     fake_disc, fake_class_disc = Discriminator(fake_batch, num_classes=num_classes)
 
-    gen_cost, disc_cost, class_cost, gen_summaries, disc_summaries = losses.calculate(real_disc, real_class_disc,
-                                                                                      fake_disc, fake_class_disc,
-                                                                                      num_classes)
+    gen_cost, disc_cost, class_cost, gen_summaries, disc_summaries = losses.calculate(real_disc, real_class_disc, real_labels,
+                                                                                      fake_disc, fake_class_disc, fake_labels,
+                                                                                      num_classes, batch_size)
 
     disc_summaries.append(tf.summary.image('Real', real_batch, max_outputs=10))
     gen_summaries.append(tf.summary.image('Generated', fake_batch, max_outputs=10))
