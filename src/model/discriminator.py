@@ -19,7 +19,7 @@ def ACGANDiscriminator(input_tensor,
         Tensor[NCHW | NHWC]: A tensor representing the output image, with the same format as the data_format param.
         Tensor[None, num_classes]: A tensor representing the classification for the image.
     """
-    with tf.variable_scope('D', reuse=tf.AUTO_REUSE):
+    with tf.variable_scope('Discriminator', reuse=tf.AUTO_REUSE):
         num_convolutions = math.log(output_dim, 2) - 1
 
         with tf.variable_scope('layers'):

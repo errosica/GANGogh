@@ -69,8 +69,8 @@ def main():
 
     with tf.variable_scope('optimizers'):
         trainable_vars = tf.trainable_variables()
-        gen_vars  = [var for var in trainable_vars if 'G' in var.name]
-        disc_vars = [var for var in trainable_vars if 'D' in var.name]
+        gen_vars  = [var for var in trainable_vars if 'Generator' in var.name]
+        disc_vars = [var for var in trainable_vars if 'Discriminator' in var.name]
 
         gen_train_op   = create_train_op(gen_cost, learning_rate=gen_lr, global_step=gen_global_step, var_list=gen_vars)
         disc_train_op  = create_train_op(disc_cost, learning_rate=disc_lr, global_step=disc_global_step, var_list=disc_vars)
