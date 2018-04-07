@@ -1,4 +1,4 @@
-import src.pipeline as pipeline
+from src.dataset import get_dataset_iterator
 from src.model.discriminator import ACGANDiscriminator as Discriminator
 from src.model.generator import ACGANGenerator as Generator
 import src.model.losses as losses
@@ -40,7 +40,7 @@ def main():
     gen_global_step  = tf.Variable(0, trainable=False, name='gen_global_step')
     disc_global_step = tf.Variable(0, trainable=False, name='disc_global_step')
 
-    iterator = pipeline.get_dataset(data_dir,
+    iterator = get_dataset_iterator(data_dir,
                                     batch_size,
                                     scale_size=image_output_size,
                                     num_classes=num_classes,

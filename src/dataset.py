@@ -1,12 +1,12 @@
 import tensorflow as tf
 import numpy as np
 
-def get_dataset(data_dir,
-                batch_size,
-                scale_size,
-                num_classes,
-                buffer_size=10000,
-                data_format='NCHW'):
+def get_dataset_iterator(data_dir,
+                         batch_size,
+                         scale_size,
+                         num_classes,
+                         buffer_size=10000,
+                         data_format='NCHW'):
     """Construct a TF dataset from a remote source"""
     def transform(tfrecord_proto):
         return transform_tfrecord(tfrecord_proto,
