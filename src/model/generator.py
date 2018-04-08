@@ -23,10 +23,9 @@ def ACGANGenerator(batch_size,
     """
     with tf.variable_scope('Generator', reuse=tf.AUTO_REUSE):
         with tf.variable_scope('input'):
-            z           = tf.random_normal([batch_size, z_dim], name='z')
-            labels_pl   = tf.placeholder([None, num_classes], tf.int32, name='labels')
-            labels      = tf.cast(labels_pl, tf.float32)
-            noise       = tf.concat([noise, labels], 1)
+            z      = tf.random_normal([batch_size, z_dim], name         ='z')
+            labels = tf.placeholder([None, num_classes], tf.int32, name ='labels')
+            noise  = tf.concat([noise, labels], 1)
 
         """
         [None, 128] -> [4, 4, 8*output_dim]
@@ -58,7 +57,7 @@ def ACGANGenerator(batch_size,
             output = upsample(output, [-1, output_dim, output_dim, 3])
             output = tf.nn.tanh(output)
 
-            return output, labels_pl
+            return output, labels
 
 def upscale(input_tensor,
             output_shape,

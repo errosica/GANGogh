@@ -36,7 +36,8 @@ def random_labels(batch_size, num_classes):
 """
 Run training routine
 """
-def main():
+def main(_):
+    print("Training!")
     gen_global_step  = tf.Variable(0, trainable=False, name='gen_global_step')
     disc_global_step = tf.Variable(0, trainable=False, name='disc_global_step')
 
@@ -117,3 +118,6 @@ def main():
                     break
 
         print('Training finished')
+
+if __name__ == '__main__':
+    tf.app.run()
