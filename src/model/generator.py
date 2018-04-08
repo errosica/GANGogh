@@ -1,5 +1,6 @@
 import math
 import tensorflow as tf
+import numpy as np
 import tensorflow.contrib.slim as slim
 
 class ACGANGenerator():
@@ -111,10 +112,11 @@ class ACGANGenerator():
 
     def generate_condition(self, input_tensor, labels, biases=True):
         with tf.variable_scope('condition'):
-            input_shape = tf.shape(input_tensor)
+            flat_shape = int(np.prod(input_tensor.get_shape()[1:]))
+
             if biases:
-                output = slim.fully_connected(labels, self.num_classes)
+                output = slim.fully_connected(labels, flat_shape)
             else:
-                output = slim.fully_connected(labels, self.num_classes, biases_initializer=None)
-            output = tf.reshape(output, input_shape)
+                output = slim.fully_connected(labels, flat_shape, biases_initializer=None)
+            output = tf.reshape(output, tf.shape(input_tensor))
             return output

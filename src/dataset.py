@@ -17,8 +17,9 @@ def get_dataset_iterator(data_dir,
     tf_dataset  = tf.data.TFRecordDataset(data_dir)
     tf_dataset  = tf_dataset.map(transform)
     tf_dataset  = tf_dataset.shuffle(buffer_size=buffer_size)
+    tf_dataset  = tf_dataset.repeat()
     tf_dataset  = tf_dataset.batch(batch_size)
-    tf_iterator = tf_dataset.make_initializable_iterator()
+    tf_iterator = tf_dataset.make_one_shot_iterator()
 
     return tf_iterator
 
