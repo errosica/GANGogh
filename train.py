@@ -127,9 +127,7 @@ def main(_):
     disc_summaries.append(tf.summary.image('real', real_batch, max_outputs=10))
     gen_summaries.append(tf.summary.image('generated', fake_batch, max_outputs=10))
 
-    gen_summaries.append(tf.summary.scalar('gen_global_step', gen_global_step))
     gen_summaries.append(tf.summary.scalar('gen_learning_rate', gen_exp_lr))
-    disc_summaries.append(tf.summary.scalar('disc_global_step', disc_global_step))
     gen_summaries.append(tf.summary.scalar('disc_learning_rate', disc_exp_lr))
 
     gen_summaries  = tf.summary.merge(gen_summaries)
