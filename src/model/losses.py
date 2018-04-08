@@ -18,7 +18,7 @@ def calculate(batch_size,
         with tf.variable_scope('real_fake'):
             with tf.variable_scope('generated'):
                 fake_class_prediction = tf.argmax(fake_class_disc, 1)
-                fake_labels           = tf.argmax(fake_labels 1)
+                fake_labels           = tf.argmax(fake_labels, 1)
                 is_fake_class_correct = tf.equal(fake_class_prediction, fake_labels)
                 accuracy_fake_class   = tf.reduce_mean(tf.cast(is_fake_class_correct, tf.float32))
 
