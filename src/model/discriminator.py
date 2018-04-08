@@ -16,7 +16,7 @@ class ACGANDiscriminator():
         self.data_format = data_format
         self.image_size  = image_size
 
-    def build_graph(self, output):
+    def build_graph(self, input_tensor):
         """
         Build AC-GAN Discriminator graph.
 
@@ -28,6 +28,8 @@ class ACGANDiscriminator():
             Tensor[None, num_classes]: A tensor representing the classification for the image.
         """
         with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):
+            output = tf.reshape(input_tensor, [-1, self.image_size, self.image_size, 3])
+
             num_convolutions = int(math.log(self.image_size, 2) - 1)
 
             with tf.variable_scope('layers'):
@@ -41,7 +43,7 @@ class ACGANDiscriminator():
                 source_output = slim.fully_connected(output, 1)
                 class_output  = slim.fully_connected(output, self.num_classes)
 
-                return source_output, class_output
+                return tf.reshape(source_output, [-1]), class_output
 
     def conv2d(self,
                input_tensor,

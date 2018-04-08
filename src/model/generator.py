@@ -54,7 +54,6 @@ class ACGANGenerator():
                         output = self.upsample(output,
                                          [-1, dimension, dimension, filters],
                                          batch_norm=True)
-                        print(output, output.shape)
                         condition = self.generate_condition(output, labels)
                         output    = self.pixcnn_gated_nonlinearity(output, condition)
 

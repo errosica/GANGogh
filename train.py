@@ -3,6 +3,7 @@ from src.model.discriminator import ACGANDiscriminator as Discriminator
 from src.model.generator import ACGANGenerator as Generator
 import src.model.losses as losses
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 import numpy as np
 from config import config
 
@@ -79,7 +80,13 @@ def main(_):
     gen_summaries  = []
     disc_summaries = []
 
+    disc_summaries.append(tf.summary.image('real', real_batch, max_outputs=10))
+    gen_summaries.append(tf.summary.image('generated', fake_batch, max_outputs=10))
+
     with tf.variable_scope('losses'):
+        real_batch = slim.flatten(real_batch)
+        fake_batch = slim.flatten(fake_batch)
+
         with tf.variable_scope('gen'):
             gen_class_loss, gen_class_accuracy = losses.class_loss(fake_class_disc, fake_labels)
             total_gen_loss = losses.total_gen_loss(fake_disc, gen_class_loss)
@@ -96,7 +103,8 @@ def main(_):
             interpolates = losses.interpolates(real_batch, fake_batch, alpha)
             interp_disc, interp_class_disc = discriminator_instance.build_graph(interpolates)
 
-            lambda_gradient_penalty = losses.lambda_gradient_penalty(interp_disc, interpolates, lambda_penalty=lambda_penalty)
+            lambda_gradient_penalty = losses.lambda_gradient_penalty(interp_disc, interpolates,
+                                                                     lambda_penalty=lambda_penalty)
 
             total_disc_loss = losses.total_disc_loss(real_disc, fake_disc, disc_class_loss, lambda_gradient_penalty)
 
@@ -122,10 +130,6 @@ def main(_):
                                          var_list=disc_vars,
                                          decay_rate=disc_lr_decay_rate,
                                          decay_steps=disc_lr_decay_steps)
-
-
-    disc_summaries.append(tf.summary.image('real', real_batch, max_outputs=10))
-    gen_summaries.append(tf.summary.image('generated', fake_batch, max_outputs=10))
 
     gen_summaries.append(tf.summary.scalar('gen_learning_rate', gen_exp_lr))
     gen_summaries.append(tf.summary.scalar('disc_learning_rate', disc_exp_lr))

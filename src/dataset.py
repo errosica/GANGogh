@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import tensorflow.contrib.slim as slim
 
 def get_dataset_iterator(data_dir,
                          batch_size,
@@ -35,19 +36,19 @@ def decode_image(image_buff, height, width, scale_size, data_format):
         data_format (str): The output image data format (NCHW or NHCW)
 
     Return:
-        Tensor[NCHW | NHCW]: A tensor of shaperepresenting the RGB image.
+        Tensor[NCHW | NHCW]: A tensor of shape representing the RGB image.
     """
-    image_arr       = tf.decode_raw(image_buff, out_type=tf.uint8)
-    image_decoded   = tf.reshape(image_arr, tf.stack([height, width, 3], axis=0))
-    image_decoded   = tf.reverse(image_decoded, [-1]) # BGR to RGB
-    image_decoded   = tf.expand_dims(image_decoded, axis=0)
-    image_resized   = tf.image.resize_nearest_neighbor(image_decoded, [scale_size, scale_size])
+    image = tf.decode_raw(image_buff, out_type=tf.uint8)
+    image = tf.reshape(image, tf.stack([height, width, 3], axis=0))
+    image = tf.reverse(image, [-1]) # BGR to RGB
+    image = tf.expand_dims(image, axis=0)
+    image = tf.image.resize_nearest_neighbor(image, [scale_size, scale_size])
     if data_format == 'NCHW':
-        image_resized = tf.transpose(image_resized, [0, 3, 1, 2])
-    image_resized   = tf.squeeze(image_resized)
-    image_converted = tf.to_float(image_resized)
-
-    return image_converted
+        image = tf.transpose(image, [0, 3, 1, 2])
+    image = tf.squeeze(image)
+    image = tf.image.convert_image_dtype(image, tf.int32)
+    image = 2.0 * ((tf.cast(image, tf.float32) / 255.0) - 0.5)
+    return image
 
 def decode_class(label, num_classes):
     return tf.one_hot(label, num_classes, dtype=tf.float32)

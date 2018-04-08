@@ -20,16 +20,13 @@ def class_loss(prediction, labels):
 
 def interpolates(real_batch, fake_batch, alpha):
     with tf.variable_scope('interpolates'):
-        real_batch_flat = slim.flatten(real_batch)
-        fake_batch_flat = slim.flatten(fake_batch)
-        differences  = fake_batch_flat - real_batch_flat
-        interpolates = real_batch_flat + (alpha*differences)
-        return tf.reshape(interpolates, tf.shape(real_batch))
+        differences  = fake_batch - real_batch
+        interpolates = real_batch + (alpha*differences)
+        return interpolates
 
-def lambda_gradient_penalty(disc, interpolates, lambda_penalty):
+def lambda_gradient_penalty(interp_disc, interpolates, lambda_penalty):
     with tf.variable_scope('lambda_gradient_penalty'):
-        disc_flat = tf.reshape(disc, [-1])
-        gradients = tf.gradients(disc_flat, [interpolates])
+        gradients = tf.gradients(interp_disc, [interpolates])
 
         gradients = gradients[0]
 
@@ -38,9 +35,9 @@ def lambda_gradient_penalty(disc, interpolates, lambda_penalty):
 
         return lambda_penalty*gradient_penalty
 
-def total_gen_loss(disc_result, class_loss):
+def total_gen_loss(fake_disc, class_loss):
     with tf.variable_scope('total_loss'):
-        gen_cost  = -tf.reduce_mean(disc_result)
+        gen_cost  = -tf.reduce_mean(fake_disc)
         gen_cost += class_loss
         return gen_cost
 
