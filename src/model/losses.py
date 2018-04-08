@@ -31,8 +31,6 @@ def lambda_gradient_penalty(disc, interpolates, lambda_penalty):
         disc_flat = tf.reshape(disc, [-1])
         gradients = tf.gradients(disc_flat, [interpolates])
 
-        print(gradients)
-
         gradients = gradients[0]
 
         slopes    = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))

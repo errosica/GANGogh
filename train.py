@@ -43,6 +43,7 @@ Run training routine
 def main(_):
     print("Training!")
     with tf.variable_scope('global_step'):
+        global_step      = tf.Variable(0, trainable=False, name='global_step')
         gen_global_step  = tf.Variable(0, trainable=False, name='gen_global_step')
         disc_global_step = tf.Variable(0, trainable=False, name='disc_global_step')
 
@@ -127,6 +128,7 @@ def main(_):
                 labels: random_labels(batch_size, num_classes)
             })
             tf.train.global_step(sess, disc_global_step)
+            tf.train.global_step(sess, global_step)
         print('Pretraining completed')
 
         """
@@ -152,6 +154,8 @@ def main(_):
                             labels: random_labels(batch_size, num_classes)
                         })
                         tf.train.global_step(sess, disc_global_step)
+
+                    tf.train.global_step(sess, global_step)
                 except tf.errors.OutOfRangeError:
                     print('Finished epoch %d' % n + 1)
                     break
