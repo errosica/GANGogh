@@ -2,115 +2,119 @@ import math
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-def ACGANGenerator(batch_size,
-                   num_classes,
-                   z_dim=128,
-                   output_dim=256,
-                   data_format='NCHW'):
-    """
-    Create AC-GAN generator graph
-
-    Params:
-        batch_size   (int). The batch size
-        num_classes  (int). The number of classes
-        z_dim        (int=128): The dimension of the input noise vector, z [128].
-        output_dim   (int=256): The dimension of the image output (i.e. height and width) [256].
-        data_format  (str='NCHW'): The data format to use for the image.
-
-    Returns:
-        Tensor[NCHW | NHWC]: A tensor representing the output image, with the same format as the data_format param.
-        Tensor[None, num_classes]: A placeholder tensor representing the intended class labels for the batch.
-    """
-    with tf.variable_scope('Generator', reuse=tf.AUTO_REUSE):
-        with tf.variable_scope('input'):
-            z      = tf.random_normal([batch_size, z_dim], name='z', dtype=tf.float32)
-            labels = tf.placeholder(tf.float32, shape=[None, num_classes], name='labels')
-            z      = tf.concat([z, labels], 1)
-
+class ACGANGenerator():
+    def __init__(self, num_classes, image_size=256, data_format='NCHW'):
         """
-        [None, 128] -> [4, 4, 8*output_dim]
+        Initialize AC-GAN generator
+
+        Params:
+            num_classes  (int). The number of classes
+            image_size   (int=256): The dimension of the image output (i.e. height and width) [256].
+            data_format  (str='NCHW'): The data format to use for the image.
         """
-        with tf.variable_scope('layers'):
-            output    = slim.fully_connected(z, 4*4*8*output_dim*2)
-            output    = tf.reshape(output, [-1, 8*output_dim*2, 4, 4])
-            output    = slim.batch_norm(output)
-            condition = generate_condition(output, labels, num_classes=num_classes, biases=False)
-            output    = pixcnn_gated_nonlinearity(output, condition)
+        self.num_classes = num_classes
+        self.image_size = image_size
+        self.data_format = data_format
 
-            num_upscales = int(math.log(output_dim, 2) - 2)
+    def build_graph(self, z, labels):
+        """
+        Build AC-GAN generator graph
+
+        Params:
+            z       (Tensor[None, None]): A 2-D tensor representing the z-input.
+            labels  (Tensor[None, None]): A 2-D tensor representing the labels for each z-input.
+
+        Returns:
+            Tensor[NCHW | NHWC]: A tensor representing the output image, with the same format as the data_format param.
+            Tensor[None, num_classes]: A placeholder tensor representing the intended class labels for the batch.
+        """
+        with tf.variable_scope('generator', reuse=tf.AUTO_REUSE):
+            z = tf.concat([z, labels], 1)
+
             """
-            dimension: 4    -> 8    -> 16  -> 32  -> 64 -> 128 -> 256
-            filters:   2048 -> 1024 -> 512 -> 256 -> 128 -> 64 -> 32
+            [None, 128] -> [4, 4, 8*output_dim]
             """
-            for i in range(num_upscales):
-                with tf.variable_scope(str(i)):
-                    dimension = 2**(i+2)
-                    filters   = (4/(2**i))*(output_dim*2)
-                    output = upscale(output,
-                                     [-1, dimension, dimension, filters],
-                                     data_format=data_format,
-                                     batch_norm=True)
-                    condition = generate_condition(output, labels, num_classes=num_classes)
-                    output    = pixcnn_gated_nonlinearity(output, condition)
+            with tf.variable_scope('layers'):
+                output    = slim.fully_connected(z, 4*4*8*self.image_size*2)
+                output    = tf.reshape(output, [-1, 8*self.image_size*2, 4, 4])
+                output    = slim.batch_norm(output)
+                condition = self.generate_condition(output, labels, biases=False)
+                output    = self.pixcnn_gated_nonlinearity(output, condition)
 
-        with tf.variable_scope('output'):
-            output = upsample(output, [-1, output_dim, output_dim, 3])
-            output = tf.nn.tanh(output)
+                num_upsamples = int(math.log(self.image_size, 2) - 2)
+                """
+                dimension: 4    -> 8    -> 16  -> 32  -> 64 -> 128 -> 256
+                filters:   2048 -> 1024 -> 512 -> 256 -> 128 -> 64 -> 32
+                """
+                for i in range(num_upsamples):
+                    with tf.variable_scope(str(i)):
+                        dimension = 2**(i+2)
+                        filters   = (4/(2**i))*(self.image_size*2)
+                        output = self.upsample(output,
+                                         [-1, dimension, dimension, filters],
+                                         batch_norm=True)
+                        print(output, output.shape)
+                        condition = self.generate_condition(output, labels)
+                        output    = self.pixcnn_gated_nonlinearity(output, condition)
 
-            return output, labels
+            with tf.variable_scope('output'):
+                output = self.upsample(output, [-1, self.image_size, self.image_size, 3])
+                output = tf.nn.tanh(output)
 
-def upscale(input_tensor,
-            output_shape,
-            kernel=5,
-            stride=2,
-            stddev=0.02,
-            data_format='NCHW',
-            batch_norm=True):
-    with tf.variable_scope('upscale'):
-        resize_shape = [
-            (output_shape[1] - 1) * stride + (kernel - 4),
-            (output_shape[2] - 1) * stride + (kernel - 4)
-        ]
+                return output
 
-        if data_format == 'NCHW':
-            input_tensor = tf.transpose(input_tensor, [0, 2, 3, 1]) # Convert input to NHWC for resizing
-        resized = tf.image.resize_nearest_neighbor(input_tensor, resize_shape)
-        if data_format == 'NCHW':
-            resized  = tf.transpose(resized, [0, 3, 1, 2]) # Convert back to NCHW
-        filters = output_shape[-1]
+    def upsample(self,
+                 input_tensor,
+                 output_shape,
+                 kernel=5,
+                 stride=2,
+                 stddev=0.02,
+                 batch_norm=False):
+        with tf.variable_scope('upsample'):
+            resize_shape = [
+                (output_shape[1] - 1) * stride + (kernel - 4),
+                (output_shape[2] - 1) * stride + (kernel - 4)
+            ]
 
-        output = slim.conv2d(resized,
-                    filters,
-                    kernel_size=kernel,
-                    stride=stride,
-                    padding='SAME',
-                    data_format=data_format,
-                    weights_initializer=tf.truncated_normal_initializer(stddev=stddev),
-                    biases_initializer=tf.constant_initializer(0.0))
+            if self.data_format == 'NCHW':
+                input_tensor = tf.transpose(input_tensor, [0, 2, 3, 1]) # Convert input to NHWC for resizing
+            resized = tf.image.resize_nearest_neighbor(input_tensor, resize_shape)
+            if self.data_format == 'NCHW':
+                resized  = tf.transpose(resized, [0, 3, 1, 2]) # Convert back to NCHW
+            filters = output_shape[-1]
 
-        if batch_norm:
-            output = slim.batch_norm(output, data_format=data_format)
+            output = slim.conv2d(resized,
+                        filters,
+                        kernel_size=kernel,
+                        stride=stride,
+                        padding='SAME',
+                        data_format=self.data_format,
+                        weights_initializer=tf.truncated_normal_initializer(stddev=stddev),
+                        biases_initializer=tf.constant_initializer(0.0))
 
-        return output
+            if batch_norm:
+                output = slim.batch_norm(output, data_format=self.data_format)
 
-def pixcnn_gated_nonlinearity(input_tensor, condition_tensor):
-    with tf.variable_scope('pixcnn_gated_nonlinearity'):
-        even_input     = input_tensor[:, ::2]
-        even_condition = condition_tensor[:, ::2]
-        odd_input      = input_tensor[:,1::2]
-        odd_condition  = condition_tensor[:,1::2]
+            return output
 
-        even_tensor    = even_input + even_condition
-        odd_tensor     = odd_input + odd_condition
+    def pixcnn_gated_nonlinearity(self, input_tensor, condition_tensor):
+        with tf.variable_scope('pixcnn_gated_nonlinearity'):
+            even_input     = input_tensor[:, ::2]
+            even_condition = condition_tensor[:, ::2]
+            odd_input      = input_tensor[:,1::2]
+            odd_condition  = condition_tensor[:,1::2]
 
-        return tf.sigmoid(even_tensor) * tf.tanh(odd_tensor)
+            even_tensor    = even_input + even_condition
+            odd_tensor     = odd_input + odd_condition
 
-def generate_condition(input_tensor, labels, num_classes, biases=True):
-    with tf.variable_scope('condition'):
-        input_shape = tf.shape(input_tensor)
-        if biases:
-            output = slim.fully_connected(labels, num_classes)
-        else:
-            output = slim.fully_connected(labels, num_classes, biases_initializer=None)
-        output = tf.reshape(output, input_shape)
-        return output
+            return tf.sigmoid(even_tensor) * tf.tanh(odd_tensor)
+
+    def generate_condition(self, input_tensor, labels, biases=True):
+        with tf.variable_scope('condition'):
+            input_shape = tf.shape(input_tensor)
+            if biases:
+                output = slim.fully_connected(labels, self.num_classes)
+            else:
+                output = slim.fully_connected(labels, self.num_classes, biases_initializer=None)
+            output = tf.reshape(output, input_shape)
+            return output

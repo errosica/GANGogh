@@ -49,7 +49,7 @@ def decode_image(image_buff, height, width, scale_size, data_format):
     return image_converted
 
 def decode_class(label, num_classes):
-    return tf.one_hot([label], num_classes, dtype=tf.float32)
+    return tf.one_hot(label, num_classes, dtype=tf.float32)
 
 def transform_tfrecord(tf_protobuf, scale_size, num_classes, data_format):
     """
