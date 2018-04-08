@@ -24,7 +24,7 @@ def ACGANGenerator(batch_size,
     with tf.variable_scope('Generator', reuse=tf.AUTO_REUSE):
         with tf.variable_scope('input'):
             z      = tf.random_normal([batch_size, z_dim], name         ='z')
-            labels = tf.placeholder([None, num_classes], tf.int32, name ='labels')
+            labels = tf.placeholder(tf.int32, shape=[None, num_classes], name ='labels')
             noise  = tf.concat([noise, labels], 1)
 
         """
