@@ -23,22 +23,21 @@ def ACGANGenerator(batch_size,
     """
     with tf.variable_scope('Generator', reuse=tf.AUTO_REUSE):
         with tf.variable_scope('input'):
-            z      = tf.random_normal([batch_size, z_dim], name ='z')
-            labels = tf.placeholder(tf.int32, shape             =[None, num_classes], name ='labels')
+            z      = tf.random_normal([batch_size, z_dim], name='z', dtype=tf.float32)
+            labels = tf.placeholder(tf.float32, shape=[None, num_classes], name='labels')
             z      = tf.concat([z, labels], 1)
 
         """
         [None, 128] -> [4, 4, 8*output_dim]
         """
         with tf.variable_scope('layers'):
-            output = slim.fully_connected(z, 4*4*8*output_dim*2)
-            output = tf.reshape(output, [-1, 8*output_dim*2, 4, 4])
-            if batch_norm:
-                output = slim.batch_norm(output)
+            output    = slim.fully_connected(z, 4*4*8*output_dim*2)
+            output    = tf.reshape(output, [-1, 8*output_dim*2, 4, 4])
+            output    = slim.batch_norm(output)
+            condition = generate_condition(output, labels, num_classes=num_classes, biases=False)
+            output    = pixcnn_gated_nonlinearity(output, condition)
 
-            output = pixcnn_gated_nonlinearity(output, labels, biases=False)
-
-            num_upscales = math.log(output_dim, 2) - 2
+            num_upscales = int(math.log(output_dim, 2) - 2)
             """
             dimension: 4    -> 8    -> 16  -> 32  -> 64 -> 128 -> 256
             filters:   2048 -> 1024 -> 512 -> 256 -> 128 -> 64 -> 32
@@ -46,12 +45,13 @@ def ACGANGenerator(batch_size,
             for i in range(num_upscales):
                 with tf.variable_scope(str(i)):
                     dimension = 2**(i+2)
-                    filters   = tf.shape(output)[-1] / 2
+                    filters   = (4/(2**i)*(output_dim*2)
                     output = upscale(output,
                                      [-1, dimension, dimension, filters],
                                      data_format=data_format,
                                      batch_norm=True)
-                    output = pixcnn_gated_nonlinearity(output, labels)
+                    condition = generate_condition(output, labels, num_classes=num_classes)
+                    output    = pixcnn_gated_nonlinearity(output, condition)
 
         with tf.variable_scope('output'):
             output = upsample(output, [-1, output_dim, output_dim, 3])
@@ -93,10 +93,8 @@ def upscale(input_tensor,
 
         return output
 
-def pixcnn_gated_nonlinearity(input_tensor, labels, biases=True):
+def pixcnn_gated_nonlinearity(input_tensor, condition_tensor):
     with tf.variable_scope('pixcnn_gated_nonlinearity'):
-        condition      = generate_condition(input_tensor, labels, biases=biases)
-
         even_input     = input_tensor[:, ::2]
         even_condition = condition_tensor[:, ::2]
         odd_input      = input_tensor[:,1::2]
@@ -105,12 +103,14 @@ def pixcnn_gated_nonlinearity(input_tensor, labels, biases=True):
         even_tensor    = even_input + even_condition
         odd_tensor     = odd_input + odd_condition
 
-        return tf.mul(tf.sigmoid(even_tensor), tf.tanh(odd_tensor))
+        return tf.sigmoid(even_tensor) * tf.tanh(odd_tensor)
 
-def generate_condition(input_tensor, labels, biases):
+def generate_condition(input_tensor, labels, num_classes, biases=True):
     with tf.variable_scope('condition'):
         input_shape = tf.shape(input_tensor)
-        label_dim   = tf.reduce_prod(input_shape[1:])
-        output      = slim.fully_connected(labels, label_dim)
-        output      = tf.reshape(output, input_shape)
+        if biases:
+            output = slim.fully_connected(labels, num_classes)
+        else:
+            output = slim.fully_connected(labels, num_classes, biases_initializer=None)
+        output = tf.reshape(output, input_shape)
         return output
