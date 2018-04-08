@@ -45,7 +45,7 @@ def ACGANGenerator(batch_size,
             for i in range(num_upscales):
                 with tf.variable_scope(str(i)):
                     dimension = 2**(i+2)
-                    filters   = (4/(2**i)*(output_dim*2)
+                    filters   = (4/(2**i))*(output_dim*2)
                     output = upscale(output,
                                      [-1, dimension, dimension, filters],
                                      data_format=data_format,
