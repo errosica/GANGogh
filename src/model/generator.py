@@ -23,15 +23,15 @@ def ACGANGenerator(batch_size,
     """
     with tf.variable_scope('Generator', reuse=tf.AUTO_REUSE):
         with tf.variable_scope('input'):
-            z      = tf.random_normal([batch_size, z_dim], name         ='z')
-            labels = tf.placeholder(tf.int32, shape=[None, num_classes], name ='labels')
-            noise  = tf.concat([noise, labels], 1)
+            z      = tf.random_normal([batch_size, z_dim], name ='z')
+            labels = tf.placeholder(tf.int32, shape             =[None, num_classes], name ='labels')
+            z      = tf.concat([z, labels], 1)
 
         """
         [None, 128] -> [4, 4, 8*output_dim]
         """
         with tf.variable_scope('layers'):
-            output = slim.fully_connected(noise, 4*4*8*output_dim*2)
+            output = slim.fully_connected(z, 4*4*8*output_dim*2)
             output = tf.reshape(output, [-1, 8*output_dim*2, 4, 4])
             if batch_norm:
                 output = slim.batch_norm(output)
