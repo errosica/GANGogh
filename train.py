@@ -67,13 +67,15 @@ def main(_):
                                         data_format=data_format)
 
         real_batch, real_labels = iterator.get_next()
+        real_batch = tf.Print(real_batch, [real_batch], 'Real image values: ')
 
     with tf.variable_scope('inputs'):
         z      = tf.placeholder(tf.float32, shape=[None, z_dim], name='z')
         labels = tf.placeholder(tf.float32, shape=[None, num_classes], name='labels')
         fake_labels = tf.identity(labels)
 
-    fake_batch  = generator_instance.build_graph(z, labels)
+    fake_batch = generator_instance.build_graph(z, labels)
+    fake_batch = tf.Print(fake_batch, [fake_batch], 'Fake image values: ')
     real_disc, real_class_disc = discriminator_instance.build_graph(real_batch)
     fake_disc, fake_class_disc = discriminator_instance.build_graph(fake_batch)
 
@@ -83,35 +85,41 @@ def main(_):
     disc_summaries.append(tf.summary.image('real', real_batch, max_outputs=10))
     gen_summaries.append(tf.summary.image('generated', fake_batch, max_outputs=10))
 
-    with tf.variable_scope('losses'):
+    with tf.variable_scope('scalars'):
         real_batch = slim.flatten(real_batch)
         fake_batch = slim.flatten(fake_batch)
 
-        with tf.variable_scope('gen'):
-            gen_class_loss, gen_class_accuracy = losses.class_loss(fake_class_disc, fake_labels)
-            total_gen_loss = losses.total_gen_loss(fake_disc, gen_class_loss)
+        mean_fake_disc = tf.reduce_mean(fake_disc)
+        mean_real_disc = tf.reduce_mean(real_disc)
 
-            gen_summaries.append(tf.summary.scalar('class_loss', gen_class_loss))
-            gen_summaries.append(tf.summary.scalar('class_accuracy', gen_class_accuracy))
-            gen_summaries.append(tf.summary.scalar('total_loss', total_gen_loss))
+        disc_summaries.append(tf.summary.scalar('mean_real_disc', mean_real_disc))
+        gen_summaries.append(tf.summary.scalar('mean_fake_disc', mean_fake_disc))
 
-        with tf.variable_scope('disc'):
-            disc_class_loss, disc_class_accuracy = losses.class_loss(real_class_disc, real_labels)
+    with tf.variable_scope('gen_loss'):
+        gen_class_loss, gen_class_accuracy = losses.class_loss(fake_class_disc, fake_labels)
+        total_gen_loss = losses.total_gen_loss(mean_fake_disc, gen_class_loss)
 
-            alpha = tf.random_uniform([batch_size, 1], minval=0., maxval=1., name='alpha')
+        gen_summaries.append(tf.summary.scalar('class_loss', gen_class_loss))
+        gen_summaries.append(tf.summary.scalar('class_accuracy', gen_class_accuracy))
+        gen_summaries.append(tf.summary.scalar('total_loss', total_gen_loss))
 
-            interpolates = losses.interpolates(real_batch, fake_batch, alpha)
-            interp_disc, interp_class_disc = discriminator_instance.build_graph(interpolates)
+    with tf.variable_scope('disc_loss'):
+        disc_class_loss, disc_class_accuracy = losses.class_loss(real_class_disc, real_labels)
 
-            lambda_gradient_penalty = losses.lambda_gradient_penalty(interp_disc, interpolates,
-                                                                     lambda_penalty=lambda_penalty)
+        alpha = tf.random_uniform([batch_size, 1], minval=0., maxval=1., name='alpha')
 
-            total_disc_loss = losses.total_disc_loss(real_disc, fake_disc, disc_class_loss, lambda_gradient_penalty)
+        interpolates = losses.interpolates(real_batch, fake_batch, alpha)
+        interp_disc, interp_class_disc = discriminator_instance.build_graph(interpolates)
 
-            disc_summaries.append(tf.summary.scalar('class_loss', disc_class_loss))
-            disc_summaries.append(tf.summary.scalar('class_accuracy', disc_class_accuracy))
-            disc_summaries.append(tf.summary.scalar('lambda_gradient_penalty', lambda_gradient_penalty))
-            disc_summaries.append(tf.summary.scalar('total_loss', total_disc_loss))
+        lambda_gradient_penalty = losses.lambda_gradient_penalty(interp_disc, interpolates,
+                                                                 lambda_penalty=lambda_penalty)
+
+        total_disc_loss = losses.total_disc_loss(mean_real_disc, mean_fake_disc, disc_class_loss, lambda_gradient_penalty)
+
+        disc_summaries.append(tf.summary.scalar('class_loss', disc_class_loss))
+        disc_summaries.append(tf.summary.scalar('class_accuracy', disc_class_accuracy))
+        disc_summaries.append(tf.summary.scalar('lambda_gradient_penalty', lambda_gradient_penalty))
+        disc_summaries.append(tf.summary.scalar('total_loss', total_disc_loss))
 
     with tf.variable_scope('optimizers'):
         trainable_vars = tf.trainable_variables()
@@ -146,12 +154,14 @@ def main(_):
         save_checkpoint_secs=300,
         config=sess_config
     ) as sess:
+        # TODO: have separate disc and gen global_step tensors in the summary writer hooks
         """
         First pre-train the discriminator for 100 steps
         """
         print('Starting pretraining routine')
-        # for i in range(100):
-        #     sess.run([disc_train_op, disc_summaries], feed_dict=random_feed_dict(z, labels))
+        for i in range(100):
+            print('Pretraining step %d' % (i+1))
+            sess.run([disc_train_op, disc_summaries], feed_dict=random_feed_dict(z, labels))
         print('Pretraining completed')
 
         """
@@ -162,11 +172,13 @@ def main(_):
             print('Starting epoch %d' % epoch_num)
             while True:
                 try:
+                    print("Running generator op")
                     sess.run([gen_train_op, gen_summaries], feed_dict=random_feed_dict(z, labels))
                     """
                     Run M discriminator training iterators for every generator iteration
                     """
                     for i in range(disc_iters):
+                        print("Running discriminator op")
                         sess.run([disc_train_op, disc_summaries], feed_dict=random_feed_dict(z, labels))
                 except tf.errors.OutOfRangeError:
                     print('Finished epoch %d' % epoch_num)

@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow.contrib.slim as slim
 
 class ACGANGenerator():
-    def __init__(self, num_classes, image_size=256, data_format='NCHW'):
+    def __init__(self, num_classes, image_size, data_format):
         """
         Initialize AC-GAN generator
 
@@ -14,7 +14,7 @@ class ACGANGenerator():
             data_format  (str='NCHW'): The data format to use for the image.
         """
         self.num_classes = num_classes
-        self.image_size = image_size
+        self.image_size  = image_size
         self.data_format = data_format
 
     def build_graph(self, z, labels):
@@ -36,9 +36,11 @@ class ACGANGenerator():
             [None, 128] -> [4, 4, 8*output_dim]
             """
             with tf.variable_scope('layers'):
-                output    = slim.fully_connected(z, 4*4*8*self.image_size*2)
-                output    = tf.reshape(output, [-1, 8*self.image_size*2, 4, 4])
-                output    = slim.batch_norm(output)
+                output    = slim.fully_connected(z, 4*4*8*self.image_size*2, activation_fn=None)
+
+                initial_output_shape = [-1, 4, 4, 8*self.image_size*2] if self.data_format == 'NHWC' else [-1, 8*self.image_size*2, 4, 4]
+                output    = tf.reshape(output, initial_output_shape)
+                output    = slim.batch_norm(output, data_format=self.data_format)
                 condition = self.generate_condition(output, labels, biases=False)
                 output    = self.pixcnn_gated_nonlinearity(output, condition)
 
@@ -49,11 +51,11 @@ class ACGANGenerator():
                 """
                 for i in range(num_upsamples):
                     with tf.variable_scope(str(i)):
-                        dimension = 2**(i+2)
-                        filters   = (4/(2**i))*(self.image_size*2)
-                        output = self.upsample(output,
-                                         [-1, dimension, dimension, filters],
-                                         batch_norm=True)
+                        dimension = int(2**(i+2))
+                        filters   = int(4/(2**i)*(self.image_size*2))
+                        output    = self.upsample(output,
+                                                  [-1, dimension, dimension, filters],
+                                                  batch_norm=True)
                         condition = self.generate_condition(output, labels)
                         output    = self.pixcnn_gated_nonlinearity(output, condition)
 
@@ -66,31 +68,21 @@ class ACGANGenerator():
     def upsample(self,
                  input_tensor,
                  output_shape,
-                 kernel=5,
+                 kernel_size=5,
                  stride=2,
-                 stddev=0.02,
-                 batch_norm=False):
-        with tf.variable_scope('upsample'):
-            resize_shape = [
-                (output_shape[1] - 1) * stride + (kernel - 4),
-                (output_shape[2] - 1) * stride + (kernel - 4)
-            ]
+                 batch_norm=True):
 
-            if self.data_format == 'NCHW':
-                input_tensor = tf.transpose(input_tensor, [0, 2, 3, 1]) # Convert input to NHWC for resizing
-            resized = tf.image.resize_nearest_neighbor(input_tensor, resize_shape)
-            if self.data_format == 'NCHW':
-                resized  = tf.transpose(resized, [0, 3, 1, 2]) # Convert back to NCHW
-            filters = output_shape[-1]
+        filters = output_shape[-1]
+        height  = output_shape[1]
+        width   = output_shape[2]
 
-            output = slim.conv2d(resized,
-                        filters,
-                        kernel_size=kernel,
-                        stride=stride,
-                        padding='SAME',
-                        data_format=self.data_format,
-                        weights_initializer=tf.truncated_normal_initializer(stddev=stddev),
-                        biases_initializer=tf.constant_initializer(0.0))
+        with tf.variable_scope('upsample_%d_%d_%d' % (height, width, filters)):
+            output  = tf.image.resize_nearest_neighbor(
+                input_tensor,
+                ((height-1)*stride + kernel_size-4,(width-1)*stride + kernel_size-4)
+            )
+
+            output = slim.conv2d(output, filters, kernel_size, stride=stride, data_format=self.data_format)
 
             if batch_norm:
                 output = slim.batch_norm(output, data_format=self.data_format)
@@ -99,6 +91,10 @@ class ACGANGenerator():
 
     def pixcnn_gated_nonlinearity(self, input_tensor, condition_tensor):
         with tf.variable_scope('pixcnn_gated_nonlinearity'):
+            if self.data_format == 'NCHW':
+                input_tensor = tf.transpose(input_tensor, [0, 2, 3, 1])
+                condition_tensor = tf.transpose(condition_tensor, [0, 2, 3, 1])
+
             even_input     = input_tensor[:, ::2]
             even_condition = condition_tensor[:, ::2]
             odd_input      = input_tensor[:,1::2]
@@ -107,15 +103,20 @@ class ACGANGenerator():
             even_tensor    = even_input + even_condition
             odd_tensor     = odd_input + odd_condition
 
-            return tf.sigmoid(even_tensor) * tf.tanh(odd_tensor)
+            output = tf.sigmoid(even_tensor) * tf.tanh(odd_tensor)
+
+            if self.data_format == 'NCHW':
+                output = tf.transpose(output, [0, 3, 1, 2])
+
+            return output
 
     def generate_condition(self, input_tensor, labels, biases=True):
         with tf.variable_scope('condition'):
             flat_shape = int(np.prod(input_tensor.get_shape()[1:]))
 
             if biases:
-                output = slim.fully_connected(labels, flat_shape)
+                output = slim.fully_connected(labels, flat_shape, activation_fn=None)
             else:
-                output = slim.fully_connected(labels, flat_shape, biases_initializer=None)
+                output = slim.fully_connected(labels, flat_shape, activation_fn=None, biases_initializer=None)
             output = tf.reshape(output, tf.shape(input_tensor))
             return output

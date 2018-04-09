@@ -6,7 +6,7 @@ def get_dataset_iterator(data_dir,
                          batch_size,
                          scale_size,
                          num_classes,
-                         buffer_size=10000,
+                         buffer_size=10,
                          data_format='NCHW'):
     """Construct a TF dataset from a remote source"""
     def transform(tfrecord_proto):
@@ -46,8 +46,7 @@ def decode_image(image_buff, height, width, scale_size, data_format):
     if data_format == 'NCHW':
         image = tf.transpose(image, [0, 3, 1, 2])
     image = tf.squeeze(image)
-    image = tf.image.convert_image_dtype(image, tf.int32)
-    image = 2.0 * ((tf.cast(image, tf.float32) / 255.0) - 0.5)
+    image = tf.image.convert_image_dtype(image, tf.float32)
     return image
 
 def decode_class(label, num_classes):

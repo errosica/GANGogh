@@ -27,24 +27,16 @@ def interpolates(real_batch, fake_batch, alpha):
 def lambda_gradient_penalty(interp_disc, interpolates, lambda_penalty):
     with tf.variable_scope('lambda_gradient_penalty'):
         gradients = tf.gradients(interp_disc, [interpolates])
-
         gradients = gradients[0]
-
         slopes    = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
         gradient_penalty = tf.reduce_mean((slopes-1.)**2)
 
         return lambda_penalty*gradient_penalty
 
-def total_gen_loss(fake_disc, class_loss):
+def total_gen_loss(mean_fake_disc, class_loss):
     with tf.variable_scope('total_loss'):
-        gen_cost  = -tf.reduce_mean(fake_disc)
-        gen_cost += class_loss
-        return gen_cost
+        return class_loss - mean_fake_disc
 
-def total_disc_loss(real_disc, fake_disc, class_loss, lambda_gradient_penalty):
+def total_disc_loss(mean_real_disc, mean_fake_disc, class_loss, lambda_gradient_penalty):
     with tf.variable_scope('total_loss'):
-        disc_cost   = tf.reduce_mean(fake_disc) - tf.reduce_mean(real_disc)
-        disc_cost  += class_loss
-        disc_cost  += lambda_gradient_penalty
-
-        return disc_cost
+        return mean_fake_disc - mean_real_disc + class_loss + lambda_gradient_penalty
