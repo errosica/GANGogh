@@ -28,8 +28,7 @@ def _int64_feature(value):
 writer = tf.python_io.TFRecordWriter(OUTPUT)
 shard_counter = 1
 estimated_shard_size = 0
-ROOT = r"F:/Data/smallimages1024_test/"
-globstr = ROOT + '*/**.png'
+globstr = os.path.join(INPUT, '*/**.png')
 files = glob.glob(globstr, recursive=True)
 for number, f in tqdm(enumerate(files), total = len(files)):
   #print("Processing file: ", f)
