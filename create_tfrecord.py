@@ -1,17 +1,19 @@
 import argparse, os
 
-# python ./create_tfrecord.py F:/Data/smallimages1024_test
+# python ./create_tfrecord.py F:/Data/images_test --Img_Size=512
 parser = argparse.ArgumentParser(description='Create Tensorflow Records')
 
 parser.add_argument('Input', action="store", help="The path to the images", type=str)
 parser.add_argument('--Output', action="store", help="The path to save the tensorflow records. Defaults to Input path", type=str)
-parser.add_argument('--Max_Size', action="store", default="10000000000",help="The maximum size of the tensorflow records. Default is 10GB", type=int)
+parser.add_argument('--Img_Size', action="store", default="64",help="The image size", type=int)
+parser.add_argument('--Max_Shard_Size', action="store", default="10000000000",help="The maximum size of the tensorflow records. Default is 10GB", type=int)
 p=parser.parse_args()
 
 INPUT = p.Input 
 default = os.path.join(INPUT,r"default.tfrecords")
 OUTPUT = os.path.join(p.Output, r"default.tfrecords") if p.Output else default
-max_shard_size = p.Max_Size
+max_shard_size = p.Max_Shard_Size
+DIM = p.Img_Size
 print("Taking input from folder: ", INPUT)
 print("Writing output to folder: ", OUTPUT)
 
@@ -28,13 +30,17 @@ def _int64_feature(value):
 writer = tf.python_io.TFRecordWriter(OUTPUT)
 shard_counter = 1
 estimated_shard_size = 0
-globstr = os.path.join(INPUT, '*/**.png')
-files = glob.glob(globstr, recursive=True)
+globstr = os.path.join(INPUT, '*/**.jpg')
+files = glob.glob(globstr, recursive=True)            #get all .jpg files
+globstr = os.path.join(INPUT, '*/**.png') 
+files.extend(glob.glob(globstr, recursive=True))      #get all .png files
+print(len(files), " files found")
 for number, f in tqdm(enumerate(files), total = len(files)):
   #print("Processing file: ", f)
   if number == 0:                                           #estimate that every file is the same size as the first
     estimated_size = os.path.getsize(f)
   img = cv2.imread(f)
+  img = cv2.resize(img,(DIM, DIM), interpolation = cv2.INTER_CUBIC)
   height, width, channels = img.shape
   folder = os.path.split(os.path.split(files[7])[0])[1]
   example = tf.train.Example(
