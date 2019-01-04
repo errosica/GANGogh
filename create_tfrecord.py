@@ -16,6 +16,7 @@ max_shard_size = p.Max_Shard_Size
 DIM = p.Img_Size
 print("Taking input from folder: ", INPUT)
 print("Writing output to folder: ", OUTPUT)
+print("Resizing Images to: ", DIM, "x", DIM)
 
 import cv2, glob, tqdm, tensorflow as tf  #only import these if the arguments are well formatted
 from tqdm import tqdm
@@ -34,7 +35,7 @@ globstr = os.path.join(INPUT, '*/**.jpg')
 files = glob.glob(globstr, recursive=True)            #get all .jpg files
 globstr = os.path.join(INPUT, '*/**.png') 
 files.extend(glob.glob(globstr, recursive=True))      #get all .png files
-print(len(files), " files found")
+print(len(files), " .jpg or .png files found")
 for number, f in tqdm(enumerate(files), total = len(files)):
   #print("Processing file: ", f)
   if number == 0:                                           #estimate that every file is the same size as the first
