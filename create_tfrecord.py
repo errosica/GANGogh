@@ -40,8 +40,11 @@ for number, f in tqdm(enumerate(files), total = len(files)):
   #print("Processing file: ", f)
   if number == 0:                                           #estimate that every file is the same size as the first
     estimated_size = os.path.getsize(f)
-  img = cv2.imread(f)
-  img = cv2.resize(img,(DIM, DIM), interpolation = cv2.INTER_CUBIC)
+  try:
+    img = cv2.imread(f)
+    img = cv2.resize(img,(DIM, DIM), interpolation = cv2.INTER_CUBIC)
+  except:
+    continue
   height, width, channels = img.shape
   folder = os.path.split(os.path.split(files[7])[0])[1]
   example = tf.train.Example(
